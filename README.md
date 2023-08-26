@@ -2,7 +2,7 @@
 
 An unremarkable text editor, written in Rust as a learning project.
 
-Inspired by [hecto]().
+Inspired by [hecto](https://www.flenker.blog/hecto/).
 
 ## To-dos
 
