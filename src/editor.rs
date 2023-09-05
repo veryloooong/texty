@@ -93,7 +93,6 @@ impl Editor {
         }
     }
 
-    // TODO: Fix writing into terminal
     fn refresh_screen(&mut self) -> Result<(), std::io::Error> {
         Terminal::clear_screen();
         Terminal::position_cursor(&Position::default());
