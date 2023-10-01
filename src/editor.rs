@@ -43,6 +43,12 @@ impl StatusMessage {
     }
 }
 
+#[derive(PartialEq, Clone, Copy)]
+enum TerminalMode {
+    Normal,
+    Insert,
+}
+
 pub struct Editor {
     should_quit: bool,
     terminal: Terminal,
@@ -50,6 +56,7 @@ pub struct Editor {
     offset: Position,
     document: Document,
     status_message: StatusMessage,
+    terminal_mode: TerminalMode,
 }
 
 impl Editor {
@@ -75,6 +82,7 @@ impl Editor {
             offset: Position::default(),
             document,
             status_message: StatusMessage::from(initial_status),
+            terminal_mode: TerminalMode::Normal,
         }
     }
 
@@ -145,7 +153,9 @@ impl Editor {
         } else {
             ""
         };
-
+        
+        let current_mode = current_mode(self.terminal_mode);
+        
         if let Some(name) = &self.document.filename {
             filename = name.clone();
             filename.truncate(20);
@@ -158,7 +168,7 @@ impl Editor {
             modified_state
         );
 
-        let file_indicator = format!("| {} ", self.document.file_type());
+        let file_indicator = format!("{} | {}", self.document.file_type(), current_mode);
 
         let len = status.len() + file_indicator.len();
         status.push_str(&" ".repeat(width.saturating_sub(len)));
@@ -270,20 +280,38 @@ impl Editor {
                 (KeyModifiers::CONTROL, KeyCode::Char('s')) => self.save_file(),
                 (KeyModifiers::CONTROL, KeyCode::Char('f')) => self.search(),
                 (_, KeyCode::Char(c)) => {
-                    self.document.insert(&self.cursor_position, c);
-                    self.move_cursor(KeyCode::Right);
+                    if self.terminal_mode == TerminalMode::Normal {
+                        match c {
+                            'h' => self.move_cursor(KeyCode::Left),
+                            'j' => self.move_cursor(KeyCode::Down),
+                            'k' => self.move_cursor(KeyCode::Up),
+                            'l' => self.move_cursor(KeyCode::Right),
+                            'i' => self.terminal_mode = TerminalMode::Insert,
+                            _ => ()
+                        }
+                    } else {
+                        self.document.insert(&self.cursor_position, c);
+                        self.move_cursor(KeyCode::Right);
+                    }
                 }
                 (_, KeyCode::Enter) => {
-                    self.document.insert(&self.cursor_position, '\n');
-                    self.move_cursor(KeyCode::Right);
+                    if self.terminal_mode == TerminalMode::Insert {
+                        self.document.insert(&self.cursor_position, '\n');
+                        self.move_cursor(KeyCode::Right);
+                    }
                 }
-                (_, KeyCode::Delete) => self.document.delete(&self.cursor_position),
+                (_, KeyCode::Delete) => {
+                    if self.terminal_mode == TerminalMode::Insert {
+                        self.document.delete(&self.cursor_position);
+                    }
+                },
                 (_, KeyCode::Backspace) => {
-                    if self.cursor_position.x > 0 || self.cursor_position.y > 0 {
+                    if self.terminal_mode == TerminalMode::Insert && (self.cursor_position.x > 0 || self.cursor_position.y > 0) {
                         self.move_cursor(KeyCode::Left);
                         self.document.delete(&self.cursor_position);
                     }
-                }
+                },
+                (_, KeyCode::Esc) => self.terminal_mode = TerminalMode::Normal,
                 (_, KeyCode::Up)
                 | (_, KeyCode::Down)
                 | (_, KeyCode::Left)
@@ -422,4 +450,11 @@ fn die(e: std::io::Error) {
     crossterm::terminal::disable_raw_mode().ok();
     Terminal::clear_screen();
     panic!("{}", e);
+}
+
+fn current_mode(mode: TerminalMode) -> String {
+    match mode {
+        TerminalMode::Normal => String::from("Normal"),
+        TerminalMode::Insert => String::from("Insert")
+    }
 }
